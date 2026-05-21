@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>한화에너지 세종 본사 인근 점심 맛집</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root {
+      --hw-orange: #FF6B00;
+      --hw-orange-light: #FF8C3A;
+      --hw-dark: #1A1A2E;
+      --hw-gray: #F7F8FA;
+      --card-radius: 14px;
+    }
+
+    body {
+      background: var(--hw-gray);
+      font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      color: #222;
+    }
+
+    /* ── 헤더 ───────────────────────────────────── */
+    .site-header {
+      background: linear-gradient(135deg, #FF6B00 0%, #FF4500 100%);
+      color: #fff;
+      padding: 28px 24px 24px;
+      box-shadow: 0 4px 16px rgba(255,107,0,0.25);
+    }
+    .site-header .badge-hq {
+      background: rgba(255,255,255,0.2);
+      border-radius: 20px;
+      font-size: 12px;
+      padding: 4px 12px;
+      display: inline-block;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+    .site-header h1 {
+      font-size: clamp(1.3rem, 4vw, 1.9rem);
+      font-weight: 800;
+      margin: 0 0 6px;
+      letter-spacing: -0.5px;
+    }
+    .site-header p {
+      font-size: 13px;
+      opacity: 0.85;
+      margin: 0;
+    }
+
+    /* ── 지도 ───────────────────────────────────── */
+    #map {
+      height: 400px;
+      border-radius: 0;
+      z-index: 0;
+    }
+    @media (max-width: 576px) { #map { height: 280px; } }
+
+    /* ── 필터 ───────────────────────────────────── */
+    .filter-bar {
+      background: #fff;
+      padding: 14px 20px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid #eee;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .filter-bar .btn-filter {
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 5px 16px;
+      border: 2px solid #ddd;
+      background: #fff;
+      color: #555;
+      transition: all 0.18s;
+      cursor: pointer;
+    }
+    .filter-bar .btn-filter:hover,
+    .filter-bar .btn-filter.active {
+      border-color: var(--hw-orange);
+      background: var(--hw-orange);
+      color: #fff;
+    }
+
+    /* ── 카드 섹션 ──────────────────────────────── */
+    .cards-section {
+      padding: 24px 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .section-title span.count {
+      background: var(--hw-orange);
+      color: #fff;
+      border-radius: 12px;
+      font-size: 12px;
+      padding: 1px 9px;
+    }
+
+    /* ── 개별 카드 ──────────────────────────────── */
+    .restaurant-card {
+      background: #fff;
+      border-radius: var(--card-radius);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      cursor: pointer;
+      transition: transform 0.18s, box-shadow 0.18s;
+      border: 1.5px solid transparent;
+      overflow: hidden;
+      height: 100%;
+    }
+    .restaurant-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(255,107,0,0.15);
+      border-color: var(--hw-orange-light);
+    }
+    .card-color-bar {
+      height: 5px;
+    }
+    .card-body-inner {
+      padding: 16px;
+    }
+    .card-genre-badge {
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 10px;
+      padding: 3px 10px;
+      display: inline-block;
+      margin-bottom: 8px;
+    }
+    .card-name {
+      font-size: 17px;
+      font-weight: 800;
+      color: #1a1a1a;
+      margin-bottom: 6px;
+      line-height: 1.3;
+    }
+    .card-address {
+      font-size: 12px;
+      color: #777;
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+    .card-hours {
+      font-size: 12px;
+      color: #555;
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+    }
+    .card-distance {
+      margin-top: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--hw-orange);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .card-footer-inner {
+      border-top: 1px solid #f0f0f0;
+      padding: 10px 16px;
+      background: #fafafa;
+      font-size: 12px;
+      color: #999;
+    }
+
+    /* ── 모달 ───────────────────────────────────── */
+    .modal-header-custom {
+      background: linear-gradient(135deg, #FF6B00, #FF4500);
+      color: #fff;
+      border-radius: 12px 12px 0 0;
+      padding: 18px 20px;
+    }
+    .modal-title-name {
+      font-size: 20px;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+    .modal .detail-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+    }
+    .modal .detail-row:last-of-type { border-bottom: none; }
+    .modal .detail-icon {
+      font-size: 18px;
+      width: 24px;
+      text-align: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .modal .detail-label {
+      font-size: 11px;
+      color: #999;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .modal .detail-value { font-weight: 600; color: #222; }
+    .btn-naver {
+      background: #03C75A;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 14px;
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+    .btn-naver:hover { background: #02a84b; color: #fff; }
+    .btn-naver-review {
+      background: #fff;
+      color: #03C75A;
+      border: 2px solid #03C75A;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 14px;
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+    .btn-naver-review:hover {
+      background: #03C75A;
+      color: #fff;
+    }
+
+    /* ── 지도 팝업 커스텀 ────────────────────────── */
+    .leaflet-popup-content-wrapper {
+      border-radius: 10px !important;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2) !important;
+    }
+    .map-popup-title {
+      font-weight: 800;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    .map-popup-genre {
+      font-size: 11px;
+      color: #777;
+      margin-bottom: 6px;
+    }
+    .map-popup-link {
+      font-size: 12px;
+      color: #03C75A;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    /* ── HQ 마커 ────────────────────────────────── */
+    .hq-marker-icon {
+      background: #FF4500;
+      border: 3px solid #fff;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      box-shadow: 0 2px 8px rgba(255,69,0,0.5);
+    }
+
+    /* ── 푸터 ───────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 24px 16px;
+      font-size: 12px;
+      color: #aaa;
+      border-top: 1px solid #e8e8e8;
+      background: #fff;
+      margin-top: 16px;
+    }
+
+    .hidden-card { display: none !important; }
+
+    /* 스크롤 힌트 */
+    .scroll-hint {
+      font-size: 11px;
+      color: #bbb;
+      text-align: right;
+      padding: 4px 0 0;
+    }
+
+    /* ── 랜덤 픽 섹션 ────────────────────────────── */
+    .pick-section {
+      background: linear-gradient(135deg, #1A1A2E 0%, #16213E 100%);
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .pick-slot {
+      min-width: 220px;
+      background: rgba(255,255,255,0.08);
+      border: 2px solid rgba(255,255,255,0.18);
+      border-radius: 12px;
+      padding: 11px 22px;
+      text-align: center;
+      color: #fff;
+      font-weight: 800;
+      font-size: 16px;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      letter-spacing: -0.3px;
+      transition: border-color 0.3s, background 0.3s;
+    }
+    .pick-slot.spinning {
+      border-color: #FFD700;
+      background: rgba(255,215,0,0.08);
+      animation: slotPulse 0.15s infinite alternate;
+    }
+    .pick-slot.landed {
+      border-color: #FFD700;
+      background: rgba(255,215,0,0.12);
+      color: #FFD700;
+    }
+    @keyframes slotPulse {
+      from { transform: scaleY(1); }
+      to   { transform: scaleY(1.04); }
+    }
+    .btn-pick {
+      background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+      color: #1A1A2E;
+      border: none;
+      border-radius: 25px;
+      padding: 12px 30px;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 4px 18px rgba(255,165,0,0.45);
+      transition: transform 0.18s, box-shadow 0.18s;
+      white-space: nowrap;
+    }
+    .btn-pick:hover:not(:disabled) {
+      transform: scale(1.06);
+      box-shadow: 0 6px 24px rgba(255,165,0,0.6);
+    }
+    .btn-pick:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
+    .pick-label {
+      color: rgba(255,255,255,0.45);
+      font-size: 12px;
+      font-weight: 600;
+      text-align: center;
+      letter-spacing: 0.5px;
+      width: 100%;
+      margin-top: -8px;
+    }
+
+    /* ── 픽된 카드 하이라이트 ─────────────────────── */
+    .card-picked {
+      border-color: #FFD700 !important;
+      box-shadow: 0 0 0 3px #FFD700, 0 8px 28px rgba(255,215,0,0.35) !important;
+      position: relative;
+    }
+    .card-picked::before {
+      content: '🎯 오늘의 픽';
+      position: absolute;
+      top: -1px; right: 10px;
+      background: #FFD700;
+      color: #1A1A2E;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 0 0 8px 8px;
+      letter-spacing: 0.3px;
+      z-index: 2;
+    }
+
+    /* ── 픽 모달 헤더 금색 ──────────────────────────── */
+    .modal-header-custom.is-pick {
+      background: linear-gradient(135deg, #B8860B, #DAA520, #FFD700);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════ 헤더 ════════════════ -->
+<header class="site-header">
+  <div class="badge-hq">📍 한화에너지 세종 본사 기준</div>
+  <h1>🍱 인근 500m 점심 맛집</h1>
+  <p>세종특별자치시 한누리대로 411 · KT&amp;G 세종타워 4층 · 도보 가능 식당 모음</p>
+</header>
+
+<!-- ════════════════ 지도 ════════════════ -->
+<div id="map"></div>
+
+<!-- ════════════════ 랜덤 픽 ════════════════ -->
+<div class="pick-section">
+  <div class="pick-slot" id="pickSlot"><span id="pickSlotText" style="opacity:0.4;">여기에 오늘의 픽이 표시돼요</span></div>
+  <button class="btn-pick" id="btnPick">🎲 오늘의 점심 랜덤 픽!</button>
+  <div class="pick-label">결정 못 하겠으면 우주에게 맡겨요</div>
+</div>
+
+<!-- ════════════════ 필터 ════════════════ -->
+<div class="filter-bar">
+  <button class="btn-filter active" data-genre="전체">🍽 전체</button>
+  <button class="btn-filter" data-genre="한식">🥘 한식</button>
+  <button class="btn-filter" data-genre="양식">🍝 양식</button>
+  <button class="btn-filter" data-genre="중식">🥡 중식</button>
+  <button class="btn-filter" data-genre="샤브샤브">🍲 샤브샤브</button>
+</div>
+
+<!-- ════════════════ 카드 그리드 ════════════════ -->
+<section class="cards-section">
+  <div class="section-title">
+    추천 식당 <span class="count" id="countBadge">6</span>
+    <span class="scroll-hint ms-auto">카드를 클릭하면 상세 정보를 볼 수 있어요 →</span>
+  </div>
+  <div class="row g-3" id="cardGrid"></div>
+</section>
+
+<!-- ════════════════ 상세 모달 ════════════════ -->
+<div class="modal fade" id="restaurantModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:14px; overflow:hidden; border:none;">
+      <div class="modal-header-custom">
+        <button type="button" class="btn-close btn-close-white float-end" data-bs-dismiss="modal"></button>
+        <div class="card-genre-badge" id="modalGenreBadge" style="margin-bottom:6px;"></div>
+        <div class="modal-title-name" id="modalName"></div>
+        <div style="font-size:12px; opacity:0.8;" id="modalDistance"></div>
+      </div>
+      <div class="modal-body" style="padding:16px 20px;">
+        <div class="detail-row">
+          <span class="detail-icon">📍</span>
+          <div>
+            <div class="detail-label">주소</div>
+            <div class="detail-value" id="modalAddress"></div>
+          </div>
+        </div>
+        <div class="detail-row" id="modalPhoneRow">
+          <span class="detail-icon">📞</span>
+          <div>
+            <div class="detail-label">전화번호</div>
+            <div class="detail-value"><a id="modalPhone" style="color:var(--hw-orange);text-decoration:none;font-weight:700;"></a></div>
+          </div>
+        </div>
+        <div class="detail-row">
+          <span class="detail-icon">🕐</span>
+          <div>
+            <div class="detail-label">영업시간</div>
+            <div class="detail-value" id="modalHours" style="line-height:1.6;"></div>
+          </div>
+        </div>
+        <div class="detail-row" id="modalMenuRow">
+          <span class="detail-icon">🍴</span>
+          <div>
+            <div class="detail-label">대표 메뉴</div>
+            <div class="detail-value" id="modalMenu"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="border:none; padding:12px 20px 20px; gap:10px; flex-wrap:nowrap;">
+        <a id="modalNaverBtn" href="#" target="_blank" rel="noopener" class="btn-naver flex-fill justify-content-center">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16.273 12.845L7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727z"/></svg>
+          네이버 지도 보기
+        </a>
+        <a id="modalReviewBtn" href="#" target="_blank" rel="noopener" class="btn-naver-review flex-fill justify-content-center">
+          ⭐ 리뷰 보기
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ 푸터 ════════════════ -->
+<footer>
+  <div>📅 정보 기준: 2025년 · 영업시간·메뉴는 변동될 수 있으니 방문 전 확인을 권장합니다.</div>
+  <div style="margin-top:4px;">지도 위 마커 클릭 또는 카드 클릭 시 상세 정보를 확인할 수 있습니다.</div>
+</footer>
+
+<!-- ════════════════ Scripts ════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ────────────────────────────────────────────────────────────────
+// 식당 데이터
+// ────────────────────────────────────────────────────────────────
+const HQ = { lat: 36.4969, lng: 127.2649 };
+
+const GENRE_STYLE = {
+  '한식':    { color: '#E74C3C', bg: '#FFF0EE', text: '#C0392B' },
+  '양식':    { color: '#3498DB', bg: '#EEF4FF', text: '#1A6FB3' },
+  '중식':    { color: '#E67E22', bg: '#FFF6EE', text: '#B35B00' },
+  '샤브샤브':{ color: '#9B59B6', bg: '#F5EEFF', text: '#7D3C98' },
+};
+
+const restaurants = [
+  {
+    id: 1,
+    name: '더 키친 우와',
+    genre: '양식',
+    address: '세종특별자치시 한누리대로 411\nKT&G세종타워A 3층',
+    phone: '044-960-5260',
+    hours: '월~토 11:00 – 21:00\n브레이크 14:50 – 17:30\n(런치 L.O 13:50 / 디너 L.O 19:50)',
+    menu: '파스타, 라자냐, 피자, 스테이크',
+    distance: '같은 건물 (0m)',
+    lat: 36.4971,
+    lng: 127.2651,
+    naverSearch: '더키친우와 세종어진점',
+  },
+  {
+    id: 2,
+    name: '소쿠리밥상 세종청사점',
+    genre: '한식',
+    address: '세종특별자치시 한누리대로 411\nKT&G세종타워A 3층 305호',
+    phone: '0507-1428-5292',
+    hours: '11:00 – 21:00\n브레이크 15:00 – 17:00\n일요일 휴무',
+    menu: '화덕 생선구이, 수제떡갈비, 막걸리 무한리필',
+    distance: '같은 건물 (0m)',
+    lat: 36.4968,
+    lng: 127.2648,
+    naverSearch: '소쿠리밥상 세종청사점',
+  },
+  {
+    id: 3,
+    name: '샤브쌈주머니 AK어진점',
+    genre: '샤브샤브',
+    address: '세종특별자치시 한누리대로 411\nAK플라자 세종점 3층',
+    phone: '0507-1396-5392',
+    hours: '월~금 11:00 – 21:30 (브레이크 15:00–17:00)\n토·일 11:00 – 21:30\nL.O 20:10',
+    menu: '샤브샤브, 월남쌈, 구이',
+    distance: '같은 건물 (0m)',
+    lat: 36.4967,
+    lng: 127.2652,
+    naverSearch: '샤브쌈주머니 세종AK어진점',
+  },
+  {
+    id: 4,
+    name: '중앙짬뽕',
+    genre: '중식',
+    address: '세종특별자치시 절재로 194\n중앙타운 3층 319호',
+    phone: '0507-1329-7433',
+    hours: '월~토 11:00 – 14:30\n(L.O 14:00)\n일요일 휴무',
+    menu: '짬뽕, 짜장면, 탕수육',
+    distance: '도보 약 5분 (300m)',
+    lat: 36.4992,
+    lng: 127.2671,
+    naverSearch: '중앙짬뽕 세종어진동',
+  },
+  {
+    id: 5,
+    name: '행복한곰탕',
+    genre: '한식',
+    address: '세종특별자치시 어진동\n중앙타운 3층',
+    phone: '',
+    hours: '점심 영업\n(방문 전 확인 권장)',
+    menu: '곰탕, 양곰탕, 모듬수육',
+    distance: '도보 약 5분 (300m)',
+    lat: 36.4993,
+    lng: 127.2674,
+    naverSearch: '행복한곰탕 세종어진동',
+  },
+  {
+    id: 6,
+    name: '일품양평해장국 세종어진점',
+    genre: '한식',
+    address: '세종특별자치시 가름로 180\n1층 132·133호',
+    phone: '0507-1420-1517',
+    hours: '월~금 10:30 – 21:30\n브레이크 16:00 – 17:00\n토요일 휴무 / 일요일 09:00 – 20:00',
+    menu: '해장국, 편육, 수육',
+    distance: '도보 약 6분 (400m)',
+    lat: 36.4937,
+    lng: 127.2644,
+    naverSearch: '일품양평해장국 세종어진점',
+  },
+];
+
+// ────────────────────────────────────────────────────────────────
+// Leaflet 지도 초기화
+// ────────────────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true }).setView([HQ.lat, HQ.lng], 16);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 19,
+}).addTo(map);
+
+// 500m 반경 원
+L.circle([HQ.lat, HQ.lng], {
+  radius: 500,
+  color: '#FF6B00',
+  weight: 2,
+  fillColor: '#FF6B00',
+  fillOpacity: 0.06,
+  dashArray: '6,6',
+}).addTo(map);
+
+// 한화에너지 본사 마커
+const hqIcon = L.divIcon({
+  className: '',
+  html: `<div style="
+    width:36px; height:36px;
+    background:#FF4500;
+    border:3px solid #fff;
+    border-radius:50% 50% 50% 0;
+    transform:rotate(-45deg);
+    box-shadow:0 3px 10px rgba(255,69,0,0.5);
+  "></div>`,
+  iconSize: [36, 36],
+  iconAnchor: [18, 36],
+  popupAnchor: [0, -38],
+});
+
+L.marker([HQ.lat, HQ.lng], { icon: hqIcon })
+  .addTo(map)
+  .bindPopup(`
+    <div style="min-width:180px;">
+      <div style="font-weight:800;font-size:14px;color:#FF4500;margin-bottom:4px;">🏢 한화에너지 세종 본사</div>
+      <div style="font-size:12px;color:#555;">세종특별자치시 한누리대로 411<br>KT&amp;G 세종타워 4층</div>
+    </div>
+  `, { maxWidth: 240 });
+
+// 식당 마커
+const markerMap = {};
+
+restaurants.forEach(r => {
+  const style = GENRE_STYLE[r.genre] || { color: '#555', bg: '#eee', text: '#333' };
+  const icon = L.divIcon({
+    className: '',
+    html: `<div style="
+      width:32px; height:32px;
+      background:${style.color};
+      border:2.5px solid #fff;
+      border-radius:50%;
+      box-shadow:0 2px 8px rgba(0,0,0,0.25);
+      display:flex; align-items:center; justify-content:center;
+      font-size:14px;
+    ">${genreEmoji(r.genre)}</div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -18],
+  });
+
+  const naverUrl = `https://map.naver.com/v5/search/${encodeURIComponent(r.naverSearch)}`;
+
+  const marker = L.marker([r.lat, r.lng], { icon })
+    .addTo(map)
+    .bindPopup(`
+      <div style="min-width:190px;">
+        <div class="map-popup-title">${r.name}</div>
+        <div class="map-popup-genre">${r.genre} · ${r.distance}</div>
+        ${r.phone ? `<div style="font-size:12px;margin-bottom:4px;">📞 <a href="tel:${r.phone}" style="color:#FF6B00;font-weight:700;">${r.phone}</a></div>` : ''}
+        <a href="${naverUrl}" target="_blank" rel="noopener" class="map-popup-link">
+          🗺 네이버 지도에서 보기 →
+        </a>
+      </div>
+    `, { maxWidth: 260 });
+
+  markerMap[r.id] = marker;
+});
+
+function genreEmoji(genre) {
+  const m = { '한식':'🥘', '양식':'🍝', '중식':'🥡', '샤브샤브':'🍲' };
+  return m[genre] || '🍴';
+}
+
+// ────────────────────────────────────────────────────────────────
+// 카드 렌더링
+// ────────────────────────────────────────────────────────────────
+const modal = new bootstrap.Modal(document.getElementById('restaurantModal'));
+document.getElementById('restaurantModal').addEventListener('hidden.bs.modal', () => {
+  document.getElementById('restaurantModal')
+    .querySelector('.modal-header-custom').classList.remove('is-pick');
+});
+
+function renderCards(filter = '전체') {
+  const grid = document.getElementById('cardGrid');
+  grid.innerHTML = '';
+  const filtered = filter === '전체' ? restaurants : restaurants.filter(r => r.genre === filter);
+  document.getElementById('countBadge').textContent = filtered.length;
+
+  filtered.forEach(r => {
+    const style = GENRE_STYLE[r.genre] || { color: '#555', bg: '#eee', text: '#333' };
+    const col = document.createElement('div');
+    col.className = 'col-12 col-sm-6 col-lg-4';
+    col.innerHTML = `
+      <div class="restaurant-card" data-id="${r.id}" role="button" tabindex="0">
+        <div class="card-color-bar" style="background:${style.color};"></div>
+        <div class="card-body-inner">
+          <span class="card-genre-badge" style="background:${style.bg};color:${style.text};">
+            ${genreEmoji(r.genre)} ${r.genre}
+          </span>
+          <div class="card-name">${r.name}</div>
+          <div class="card-address">${r.address.replace(/\n/g, ' ')}</div>
+          <div class="card-hours">🕐 <span>${r.hours.split('\n')[0]}</span></div>
+          <div class="card-distance">📍 ${r.distance}</div>
+        </div>
+        <div class="card-footer-inner">
+          ${r.phone ? `📞 ${r.phone}` : '전화번호 확인 필요'} &nbsp;·&nbsp; 클릭하여 상세 정보 보기
+        </div>
+      </div>
+    `;
+    col.querySelector('.restaurant-card').addEventListener('click', () => openModal(r));
+    col.querySelector('.restaurant-card').addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') openModal(r);
+    });
+    grid.appendChild(col);
+  });
+}
+
+function openModal(r) {
+  const style = GENRE_STYLE[r.genre] || { color: '#555', bg: '#eee', text: '#333' };
+  const naverUrl  = `https://map.naver.com/v5/search/${encodeURIComponent(r.naverSearch)}`;
+  const reviewUrl = `https://map.naver.com/v5/search/${encodeURIComponent(r.naverSearch)}`;
+
+  document.getElementById('modalGenreBadge').textContent = `${genreEmoji(r.genre)} ${r.genre}`;
+  document.getElementById('modalGenreBadge').style.cssText = `background:rgba(255,255,255,0.25);color:#fff;font-size:12px;font-weight:700;border-radius:10px;padding:3px 12px;display:inline-block;margin-bottom:6px;`;
+  document.getElementById('modalName').textContent = r.name;
+  document.getElementById('modalDistance').textContent = r.distance;
+  document.getElementById('modalAddress').innerHTML = r.address.replace(/\n/g, '<br>');
+  document.getElementById('modalHours').innerHTML = r.hours.replace(/\n/g, '<br>');
+  document.getElementById('modalMenu').textContent = r.menu;
+
+  const phoneRow = document.getElementById('modalPhoneRow');
+  const phoneEl  = document.getElementById('modalPhone');
+  if (r.phone) {
+    phoneRow.style.display = '';
+    phoneEl.textContent = r.phone;
+    phoneEl.href = `tel:${r.phone}`;
+  } else {
+    phoneRow.style.display = 'none';
+  }
+
+  document.getElementById('modalNaverBtn').href = naverUrl;
+  document.getElementById('modalReviewBtn').href = reviewUrl;
+
+  modal.show();
+
+  // 지도 이동
+  map.flyTo([r.lat, r.lng], 17, { duration: 0.8 });
+  setTimeout(() => markerMap[r.id]?.openPopup(), 900);
+}
+
+// ────────────────────────────────────────────────────────────────
+// 필터 버튼
+// ────────────────────────────────────────────────────────────────
+document.querySelectorAll('.btn-filter').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const genre = btn.dataset.genre;
+    renderCards(genre);
+
+    // 마커 가시성
+    restaurants.forEach(r => {
+      const marker = markerMap[r.id];
+      if (!marker) return;
+      if (genre === '전체' || r.genre === genre) {
+        if (!map.hasLayer(marker)) map.addLayer(marker);
+      } else {
+        if (map.hasLayer(marker)) map.removeLayer(marker);
+      }
+    });
+  });
+});
+
+// ────────────────────────────────────────────────────────────────
+// 랜덤 픽 룰렛
+// ────────────────────────────────────────────────────────────────
+let lastPickedId = null;
+
+document.getElementById('btnPick').addEventListener('click', startRoulette);
+
+function startRoulette() {
+  const btn      = document.getElementById('btnPick');
+  const slot     = document.getElementById('pickSlot');
+  const slotText = document.getElementById('pickSlotText');
+
+  // 필터 전체로 리셋
+  document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
+  document.querySelector('.btn-filter[data-genre="전체"]').classList.add('active');
+  renderCards('전체');
+  restaurants.forEach(r => { if (!map.hasLayer(markerMap[r.id])) map.addLayer(markerMap[r.id]); });
+
+  // 이전 픽 하이라이트 제거
+  document.querySelectorAll('.card-picked').forEach(c => c.classList.remove('card-picked'));
+  document.getElementById('restaurantModal')
+    .querySelector('.modal-header-custom').classList.remove('is-pick');
+
+  btn.disabled = true;
+  btn.textContent = '🎰 뽑는 중...';
+  slot.classList.add('spinning');
+  slot.classList.remove('landed');
+  slotText.style.opacity = '1';
+
+  // 가속 → 감속 사이클
+  const steps = [];
+  for (let i = 0; i < 12; i++) steps.push(70);       // 빠름
+  for (let i = 0; i < 6;  i++) steps.push(100 + i * 40); // 느려짐
+  for (let i = 0; i < 4;  i++) steps.push(280 + i * 60); // 착지
+  steps.push(500); // 마지막 정지 전 잠깐 멈춤
+
+  // 최종 픽 (이전 픽 제외)
+  const pool = lastPickedId != null && restaurants.length > 1
+    ? restaurants.filter(r => r.id !== lastPickedId)
+    : restaurants;
+  const picked = pool[Math.floor(Math.random() * pool.length)];
+
+  let idx = 0;
+  function nextStep() {
+    if (idx < steps.length - 1) {
+      // 슬롯에 랜덤 이름 표시
+      const temp = restaurants[Math.floor(Math.random() * restaurants.length)];
+      slotText.textContent = temp.name;
+      idx++;
+      setTimeout(nextStep, steps[idx]);
+    } else {
+      // 착지
+      slot.classList.remove('spinning');
+      slot.classList.add('landed');
+      slotText.textContent = `🎯 ${picked.name}`;
+      btn.textContent = '🎲 다시 뽑기';
+      btn.disabled = false;
+      lastPickedId = picked.id;
+
+      // 카드 하이라이트 + 스크롤 + 모달
+      setTimeout(() => {
+        const card = document.querySelector(`.restaurant-card[data-id="${picked.id}"]`);
+        if (card) {
+          card.classList.add('card-picked');
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        // 모달 헤더 금색
+        const modalHeaderEl = document.getElementById('restaurantModal')
+          .querySelector('.modal-header-custom');
+        modalHeaderEl.classList.add('is-pick');
+        openModal(picked);
+      }, 350);
+    }
+  }
+  setTimeout(nextStep, steps[0]);
+}
+
+// ────────────────────────────────────────────────────────────────
+// 초기 렌더링
+// ────────────────────────────────────────────────────────────────
+renderCards();
+</script>
+</body>
+</html>
