@@ -386,6 +386,110 @@
       background: #fff;
       margin-top: 10px;
     }
+
+    /* ── 인기도 뱃지 ── */
+    .pop-badge {
+      display: inline-flex;
+      align-items: center;
+      font-size: 10px;
+      font-weight: 800;
+      border-radius: 3px;
+      padding: 1px 6px;
+      letter-spacing: 0.2px;
+    }
+    .pop-hot    { background:#FFF0EE; color:#E74C3C; }
+    .pop-rising { background:#EEFFF5; color:#27AE60; }
+    .pop-bar-wrap {
+      width: 100%;
+      height: 3px;
+      background: #F0F0F0;
+      border-radius: 2px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .pop-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: linear-gradient(90deg, var(--hw-orange), #FF9A4D);
+      transition: width 0.7s ease;
+    }
+
+    /* ── 정렬 바 ── */
+    .sort-bar {
+      background: #F8F9FA;
+      padding: 8px 20px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      border-bottom: 1px solid var(--hw-border);
+      flex-wrap: wrap;
+    }
+    .sort-label { font-size: 12px; font-weight: 600; color: #888; flex-shrink: 0; }
+    .btn-sort {
+      border: 1.5px solid var(--hw-border);
+      background: #fff;
+      color: #777;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.14s;
+    }
+    .btn-sort.active { border-color:var(--hw-orange); background:var(--hw-orange); color:#fff; }
+    .btn-sort:hover:not(.active) { border-color:var(--hw-orange); color:var(--hw-orange); }
+    .btn-refresh {
+      background: #fff;
+      border: 1.5px solid var(--hw-border);
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #888;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.14s;
+      margin-left: auto;
+    }
+    .btn-refresh:hover { border-color:var(--hw-orange); color:var(--hw-orange); }
+    .refresh-icon { display:inline-block; }
+    .btn-refresh.spinning .refresh-icon { animation: spinIcon 0.7s linear infinite; }
+    @keyframes spinIcon { to { transform: rotate(360deg); } }
+    .live-dot {
+      width: 6px; height: 6px;
+      background: #27AE60;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+      animation: livePulse 1.8s ease-in-out infinite;
+    }
+    @keyframes livePulse {
+      0%,100% { opacity:1; transform:scale(1); }
+      50%      { opacity:0.35; transform:scale(0.75); }
+    }
+    .refresh-time { font-size: 10px; color: #ccc; white-space: nowrap; }
+
+    /* ── 카테고리 픽 버튼 ── */
+    .btn-cat-pick {
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      border: 1.5px solid rgba(255,255,255,0.35);
+      border-radius: 6px;
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.15s;
+      white-space: nowrap;
+    }
+    .btn-cat-pick:hover:not(:disabled) {
+      background: rgba(255,255,255,0.22);
+      border-color: rgba(255,255,255,0.7);
+      transform: translateY(-1px);
+    }
+    .btn-cat-pick:disabled { opacity:0.45; cursor:not-allowed; transform:none; }
   </style>
 </head>
 <body>
@@ -420,11 +524,24 @@
     <span id="pickSlotText" style="opacity:0.3;">여기에 오늘의 픽이 표시돼요</span>
   </div>
   <button class="btn-pick" id="btnPick">🎲 오늘의 점심 랜덤 픽!</button>
+  <button class="btn-cat-pick" id="btnCatPick" style="display:none;">🎯 카테고리 랜덤 픽</button>
   <div class="pick-sub">결정 못 하겠으면 운에 맡겨요</div>
 </div>
 
 <!-- ══ 필터 ══ -->
 <div class="filter-bar" id="filterBar"></div>
+
+<!-- ══ 정렬 바 ══ -->
+<div class="sort-bar">
+  <span class="sort-label">정렬</span>
+  <button class="btn-sort active" id="btnSortDefault">기본순</button>
+  <button class="btn-sort" id="btnSortPopular">🔥 인기순</button>
+  <span class="live-dot" title="실시간 인기도 반영 중"></span>
+  <button class="btn-refresh" id="btnRefresh">
+    <span class="refresh-icon">↻</span> 새로고침
+  </button>
+  <span class="refresh-time" id="refreshTime"></span>
+</div>
 
 <!-- ══ 카드 그리드 ══ -->
 <section class="cards-section">
@@ -498,6 +615,70 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+/* ──────────────────────────────────────────
+   인기도 시스템 (시간/요일 기반 시뮬레이션)
+────────────────────────────────────────── */
+const POPULARITY_BASE = {
+  // 세종 한식
+  1:85, 2:72, 3:70, 4:91, 5:69, 6:76, 7:64, 8:71, 9:63, 10:74, 11:77, 12:68,
+  // 세종 양식
+  13:80, 14:89, 15:86, 16:81, 17:72, 18:67, 19:79, 20:69, 21:64, 22:76,
+  // 세종 중식
+  23:89, 24:75, 25:83, 26:68, 27:73, 28:70, 29:65, 30:67, 31:71, 32:73,
+  // 세종 샤브샤브
+  33:85, 34:83, 35:78, 36:67, 37:71, 38:73, 39:68, 40:64, 41:70, 42:72,
+  // 서울 한식
+  101:90, 102:83, 103:77, 104:76, 105:74, 106:70, 107:75, 108:68, 109:72, 110:69, 111:65, 112:73,
+  // 서울 양식
+  113:72, 114:74, 115:82, 116:79, 117:77, 118:67, 119:65, 120:87, 121:70, 122:85,
+  // 서울 중식
+  123:80, 124:75, 125:86, 126:72, 127:73, 128:70, 129:67, 130:74, 131:79, 132:69,
+  // 서울 냉면
+  133:93, 134:88, 135:85, 136:82, 137:78, 138:71, 139:74, 140:69, 141:77, 142:68,
+  // 서울 분식
+  143:93, 144:77, 145:78, 146:70, 147:76, 148:83, 149:65, 150:71, 151:74, 152:68,
+};
+let popularityScores = {};
+let lastRefreshTime  = new Date();
+let refreshSeed      = Date.now();
+
+function seededRand(seed) {
+  const x = Math.sin(seed + 1) * 10000;
+  return x - Math.floor(x);
+}
+
+function refreshPopularity() {
+  const now   = new Date();
+  const dSeed = now.getFullYear() * 10000 + (now.getMonth()+1) * 100 + now.getDate();
+  const hSeed = Math.floor(now.getTime() / (5 * 60 * 1000));
+  const hour  = now.getHours() + now.getMinutes() / 60;
+  Object.values(LOCATIONS).forEach(loc => {
+    loc.restaurants.forEach(r => {
+      const base  = POPULARITY_BASE[r.id] || 70;
+      const daily = Math.floor(seededRand(r.id * 137 + dSeed) * 18) - 9;
+      const lunch = (hour >= 11.5 && hour <= 13.5)
+        ? Math.round((1 - Math.abs(hour - 12.5)) * 12 * seededRand(r.id * 53 + dSeed))
+        : 0;
+      const rt    = Math.floor(seededRand(r.id * 73 + hSeed + (refreshSeed % 997)) * 10) - 5;
+      popularityScores[r.id] = Math.min(99, Math.max(10, base + daily + lunch + rt));
+    });
+  });
+  lastRefreshTime = new Date();
+}
+
+function getPopLabel(score) {
+  if (score >= 87) return { text:'🔥 인기', cls:'pop-hot' };
+  if (score >= 73) return { text:'📈 상승중', cls:'pop-rising' };
+  return null;
+}
+
+function updateRefreshTime() {
+  const el = document.getElementById('refreshTime');
+  if (!el) return;
+  const t = lastRefreshTime;
+  el.textContent = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')} 업데이트`;
+}
+
 /* ──────────────────────────────────────────
    공통 스타일
 ────────────────────────────────────────── */
@@ -652,6 +833,7 @@ const LOCATIONS = {
 ────────────────────────────────────────── */
 let currentLoc    = 'sejong';
 let currentFilter = '전체';
+let currentSort   = 'default';
 let lastPickedId  = null;
 const maps       = {};
 const markerMaps = {};
@@ -725,6 +907,16 @@ function renderFilters() {
     btn.addEventListener('click', () => applyFilter(g));
     bar.appendChild(btn);
   });
+
+  const catBtn = document.getElementById('btnCatPick');
+  if (catBtn) {
+    if (currentFilter !== '전체') {
+      catBtn.style.display = '';
+      catBtn.textContent = `🎯 ${genreEmoji(currentFilter)} ${currentFilter} 랜덤 픽`;
+    } else {
+      catBtn.style.display = 'none';
+    }
+  }
 }
 
 function applyFilter(genre) {
@@ -748,24 +940,38 @@ function renderCards() {
   const loc  = LOCATIONS[currentLoc];
   const grid = document.getElementById('cardGrid');
   grid.innerHTML = '';
-  const filtered = currentFilter === '전체'
-    ? loc.restaurants
+
+  let filtered = currentFilter === '전체'
+    ? [...loc.restaurants]
     : loc.restaurants.filter(r => r.genre === currentFilter);
+
+  if (currentSort === 'popular') {
+    filtered.sort((a, b) => (popularityScores[b.id] || 70) - (popularityScores[a.id] || 70));
+  }
   document.getElementById('countBadge').textContent = filtered.length;
 
   filtered.forEach(r => {
-    const s = GENRE_STYLE[r.genre] || { color:'#555',bg:'#eee',text:'#333' };
+    const s     = GENRE_STYLE[r.genre] || { color:'#555',bg:'#eee',text:'#333' };
+    const score = popularityScores[r.id] || 70;
+    const pop   = getPopLabel(score);
+
     const col = document.createElement('div');
     col.className = 'col-12 col-sm-6 col-lg-4';
     col.innerHTML = `
       <div class="restaurant-card" data-id="${r.id}" role="button" tabindex="0">
         <div class="card-top-bar" style="background:${s.color};"></div>
         <div class="card-content">
-          <span class="genre-chip" style="background:${s.bg};color:${s.text};">${genreEmoji(r.genre)} ${r.genre}</span>
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
+            <span class="genre-chip" style="background:${s.bg};color:${s.text};margin-bottom:0;">${genreEmoji(r.genre)} ${r.genre}</span>
+            ${pop ? `<span class="pop-badge ${pop.cls}">${pop.text}</span>` : ''}
+          </div>
           <div class="card-name">${r.name}</div>
           <div class="card-addr">${r.address.replace(/\n/g,' ')}</div>
           <div class="card-hours">🕐 <span>${r.hours.split('\n')[0]}</span></div>
           <div class="card-dist">📍 ${r.distance}</div>
+          <div class="pop-bar-wrap">
+            <div class="pop-bar-fill" style="width:${score}%;"></div>
+          </div>
         </div>
         <div class="card-foot">
           ${r.phone ? `📞 ${r.phone}` : '전화번호 확인 필요'} &nbsp;·&nbsp; 클릭하여 상세 정보 보기
@@ -833,7 +1039,10 @@ document.querySelectorAll('.loc-tab').forEach(tab => {
 
     currentLoc    = tab.dataset.loc;
     currentFilter = '전체';
+    currentSort   = 'default';
     lastPickedId  = null;
+    document.getElementById('btnSortDefault').classList.add('active');
+    document.getElementById('btnSortPopular').classList.remove('active');
 
     const mapEl = document.getElementById(`map-${currentLoc}`);
     mapEl.style.display = '';
@@ -918,11 +1127,105 @@ function startRoulette() {
 }
 
 /* ──────────────────────────────────────────
+   카테고리 랜덤 픽
+────────────────────────────────────────── */
+document.getElementById('btnCatPick').addEventListener('click', startCatRoulette);
+
+function startCatRoulette() {
+  const catBtn   = document.getElementById('btnCatPick');
+  const mainBtn  = document.getElementById('btnPick');
+  const slot     = document.getElementById('pickSlot');
+  const slotText = document.getElementById('pickSlotText');
+  const loc      = LOCATIONS[currentLoc];
+
+  const pool = currentFilter !== '전체'
+    ? loc.restaurants.filter(r => r.genre === currentFilter)
+    : loc.restaurants;
+  if (pool.length === 0) return;
+
+  document.querySelectorAll('.card-picked').forEach(c => c.classList.remove('card-picked'));
+  document.getElementById('modalHead').classList.remove('is-pick');
+
+  catBtn.disabled  = true;
+  mainBtn.disabled = true;
+  slot.classList.add('spinning');
+  slot.classList.remove('landed');
+  slotText.style.opacity = '1';
+
+  const steps = [];
+  for (let i=0;i<10;i++) steps.push(70);
+  for (let i=0;i<5; i++) steps.push(100+i*40);
+  for (let i=0;i<3; i++) steps.push(280+i*60);
+  steps.push(500);
+
+  const picked = pool[Math.floor(Math.random() * pool.length)];
+  let idx = 0;
+  function tick() {
+    if (idx < steps.length - 1) {
+      slotText.textContent = pool[Math.floor(Math.random()*pool.length)].name;
+      idx++;
+      setTimeout(tick, steps[idx]);
+    } else {
+      slot.classList.remove('spinning');
+      slot.classList.add('landed');
+      slotText.textContent = `🎯 ${picked.name}`;
+      catBtn.disabled  = false;
+      mainBtn.disabled = false;
+      lastPickedId     = picked.id;
+      setTimeout(() => {
+        const card = document.querySelector(`.restaurant-card[data-id="${picked.id}"]`);
+        if (card) { card.classList.add('card-picked'); card.scrollIntoView({ behavior:'smooth', block:'center' }); }
+        document.getElementById('modalHead').classList.add('is-pick');
+        openModal(picked);
+      }, 350);
+    }
+  }
+  setTimeout(tick, steps[0]);
+}
+
+/* ──────────────────────────────────────────
+   인기순 정렬 / 새로고침
+────────────────────────────────────────── */
+document.getElementById('btnSortDefault').addEventListener('click', () => setSort('default'));
+document.getElementById('btnSortPopular').addEventListener('click', () => setSort('popular'));
+document.getElementById('btnRefresh').addEventListener('click', doRefresh);
+
+function setSort(type) {
+  currentSort = type;
+  document.getElementById('btnSortDefault').classList.toggle('active', type === 'default');
+  document.getElementById('btnSortPopular').classList.toggle('active', type === 'popular');
+  renderCards();
+}
+
+function doRefresh() {
+  const btn = document.getElementById('btnRefresh');
+  btn.classList.add('spinning');
+  btn.disabled = true;
+  refreshSeed = Date.now();
+  setTimeout(() => {
+    refreshPopularity();
+    renderCards();
+    updateRefreshTime();
+    btn.classList.remove('spinning');
+    btn.disabled = false;
+  }, 650);
+}
+
+/* ──────────────────────────────────────────
    초기 렌더링
 ────────────────────────────────────────── */
+refreshPopularity();
+updateRefreshTime();
 initMap('sejong');
 renderFilters();
 renderCards();
+
+setInterval(() => {
+  refreshSeed = Date.now();
+  refreshPopularity();
+  if (currentSort === 'popular') renderCards();
+  updateRefreshTime();
+}, 5 * 60 * 1000);
 </script>
 </body>
 </html>
